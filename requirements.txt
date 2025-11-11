@@ -1,0 +1,54 @@
+# PyTorch (CPU version - install with conda first)
+# torch==1.12.1+cpu
+# torchvision==0.13.1+cpu
+# torchaudio==0.12.1+cpu
+
+# Core Scientific Computing
+numpy>=1.21.0,<1.24.0
+pandas>=1.3.0
+matplotlib>=3.4.0
+seaborn>=0.11.0
+scikit-learn>=1.0.0
+scipy>=1.7.0
+
+# Image Processing
+Pillow>=9.0.0
+opencv-python>=4.5.0
+pydicom>=2.3.0
+albumentations==1.3.0
+
+# MMDetection & Digital Eye
+openmim
+mmcv-full==1.7.1
+mmdet==2.28.2
+ultralytics==8.3.6
+
+# Model Components
+timm
+einops
+efficientnet-pytorch
+
+# Visualization
+plotly>=5.0.0
+grad-cam>=1.4.0
+
+# Development Tools
+jupyter
+notebook
+ipykernel
+black
+flake8
+pytest
+pytest-cov
+
+# Utilities
+tqdm>=4.62.0
+pyyaml>=6.0
+
+# Experiment Tracking
+tensorboard
+wandb
+
+# Web Interface
+streamlit>=1.20.0
+streamlit-drawable-canvas

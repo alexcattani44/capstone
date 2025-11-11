@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# PyCharm
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Data files (too large for git)
+data/raw/
+data/processed/
+*.dcm
+*.npy
+*.npz
+*.h5
+*.hdf5
+
+# Model files (too large for git)
+models/pretrained/*.pth
+models/pretrained/*.pt
+models/checkpoints/*.pth
+models/checkpoints/*.pt
+*.ckpt
+*.safetensors
+
+# Results
+results/
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Experiment tracking
+wandb/
+runs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.conda/
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*.swo
+*~
