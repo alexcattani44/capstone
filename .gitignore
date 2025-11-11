@@ -14,34 +14,62 @@ build/
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
-*.ipynb_checkpoints
 
-# PyCharm
+# IDEs
 .idea/
 *.iml
-
-# VS Code
 .vscode/
+*.swp
+*.swo
+*~
 
-# Data files (too large for git)
-data/raw/
-data/processed/
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Data files (keep structure, ignore contents)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/README.md
+
+data/annotations/*
+!data/annotations/.gitkeep
+!data/annotations/README.md
+
+# Large data files anywhere
 *.dcm
 *.npy
 *.npz
 *.h5
 *.hdf5
 
-# Model files (too large for git)
-models/pretrained/*.pth
-models/pretrained/*.pt
-models/checkpoints/*.pth
-models/checkpoints/*.pt
+# Model files (keep structure, ignore weights)
+models/pretrained/*
+!models/pretrained/.gitkeep
+!models/pretrained/README.md
+
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+!models/checkpoints/README.md
+
+*.pth
+*.pt
 *.ckpt
 *.safetensors
+*.onnx
 
-# Results
-results/
+# Results (keep structure, ignore outputs)
+results/figures/*
+!results/figures/.gitkeep
+
+results/reports/*
+!results/reports/.gitkeep
+
 *.png
 *.jpg
 *.jpeg
@@ -50,19 +78,12 @@ results/
 # Experiment tracking
 wandb/
 runs/
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
+mlruns/
 
 # Environment
 .env
 .conda/
 
-# Temporary files
-*.tmp
+# Logs
 *.log
-*.swp
-*.swo
-*~
+*.tmp
