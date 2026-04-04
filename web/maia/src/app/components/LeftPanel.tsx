@@ -103,11 +103,8 @@ export function LeftPanel({
       <button
         onClick={onAnalyze}
         disabled={isAnalyzing}
-        className="w-full rounded-lg py-3.5 text-sm font-bold tracking-[0.3px] text-[#0b0f14] transition-opacity disabled:opacity-40"
-        style={{
-          backgroundImage:
-            "linear-gradient(135deg, rgb(79, 195, 247) 0%, rgb(41, 182, 246) 100%)",
-        }}
+        // add cursor clickable when not analyzing, and not-allowed when analyzing
+        className="w-full rounded-lg py-3.5 text-sm font-bold tracking-[0.3px] text-[#0b0f14] transition-opacity disabled:opacity-40 bg-[var(--color-accent-cyan)] hover:enabled:opacity-80 hover:enabled:cursor-pointer"
       >
         Analyze Mammogram
       </button>
