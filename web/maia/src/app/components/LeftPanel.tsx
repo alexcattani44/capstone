@@ -59,7 +59,7 @@ export function LeftPanel({
   const hasFile = metadata.some((m) => m.value !== "—");
 
   return (
-    <div className="h-full overflow-auto border-r border-[var(--color-border-default)] p-6 flex flex-col gap-5">
+    <div className="h-full overflow-y-auto custom-scrollbar border-r border-[var(--color-border-default)] p-6 flex flex-col gap-5">
       {hasFile ? (
         <div className="flex flex-col gap-2 w-full">
           <h3 className="text-[var(--color-text-secondary)] text-[10px] font-bold uppercase tracking-[1.8px]">
