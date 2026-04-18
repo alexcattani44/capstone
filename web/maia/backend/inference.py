@@ -115,19 +115,27 @@ class MammographyInference:
             return arr, img.width, img.height
 
     def _load_dicom(self, path: str) -> tuple[np.ndarray, int, int]:
-        """Load DICOM file. Falls back to PIL if pydicom unavailable."""
+        """Load DICOM file. Requires pydicom."""
         try:
             import pydicom
-            ds = pydicom.dcmread(path)
-            arr = ds.pixel_array.astype(np.float32)
-            # Normalize to 0-255
-            arr = ((arr - arr.min()) / (arr.max() - arr.min() + 1e-8) * 255).astype(np.uint8)
-            h, w = arr.shape[:2]
-            return arr, w, h
-        except ImportError:
-            # Try loading as regular image
-            img = Image.open(path).convert("L")
-            return np.array(img), img.width, img.height
+        except ImportError as exc:
+            raise ValueError(
+                "DICOM support not available — install pydicom "
+                "(uncomment it in backend/requirements.txt)"
+            ) from exc
+
+        ds = pydicom.dcmread(path)
+        arr = ds.pixel_array.astype(np.float32)
+        # Handle photometric interpretation (MONOCHROME1 is inverted)
+        photometric = getattr(ds, "PhotometricInterpretation", "")
+        if photometric == "MONOCHROME1":
+            arr = arr.max() - arr
+        # Normalize to 0-255
+        arr = ((arr - arr.min()) / (arr.max() - arr.min() + 1e-8) * 255).astype(np.uint8)
+        if arr.ndim == 3:
+            arr = arr[..., 0]
+        h, w = arr.shape[:2]
+        return arr, w, h
 
     # ------------------------------------------------------------------
     # YOLO inference
@@ -434,6 +442,9 @@ class MammographyInference:
             "classification_confidence": class_conf,
             "risk_score": risk_score,
             "risk_level": risk_level,
+            # Until a trained EHR-fusion risk model is wired in, clearly label
+            # this value as a heuristic so the frontend can surface the caveat.
+            "risk_model_type": "heuristic",
             "heatmap": combined_heatmap,
             "model_info": {
                 "models_used": models_used,
@@ -441,6 +452,7 @@ class MammographyInference:
                 "patch_size": self.config.get("patch_size", 224),
                 "confidence_threshold": confidence_threshold,
                 "compute": "CPU",
+                "risk_model_type": "heuristic",
             },
         }
 
