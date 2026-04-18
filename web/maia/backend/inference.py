@@ -25,6 +25,10 @@ class MammographyInference:
     - calc_yolo.onnx       → YOLO calcification detector
     - mass_patch.onnx      → EfficientNet mass patch classifier
     - calc_patch.onnx      → EfficientNet calcification patch classifier
+    - mass_backbone.onnx   → EfficientNet feature extractor for risk (mass)
+    - calc_backbone.onnx   → EfficientNet feature extractor for risk (calc)
+    - mass_risk.onnx       → Risk MLP: image features + EHR → risk score (mass)
+    - calc_risk.onnx       → Risk MLP: image features + EHR → risk score (calc)
 
     Any subset of models can be present — the engine uses what's available.
     """
@@ -49,6 +53,12 @@ class MammographyInference:
         self.patch_mass = self._load_model("mass_patch.onnx")
         self.patch_calc = self._load_model("calc_patch.onnx")
 
+        # --- RISK MODEL --- Load backbone + risk MLP models
+        self.backbone_mass = self._load_model("mass_backbone.onnx")
+        self.backbone_calc = self._load_model("calc_backbone.onnx")
+        self.risk_mass = self._load_model("mass_risk.onnx")
+        self.risk_calc = self._load_model("calc_risk.onnx")
+
         # Load inference config if available
         config_path = self.models_dir / "inference_config.json"
         if config_path.exists():
@@ -56,6 +66,14 @@ class MammographyInference:
                 self.config = json.load(f)
         else:
             self.config = self._default_config()
+
+        # --- RISK MODEL --- Load risk config if available
+        risk_config_path = self.models_dir / "risk_config.json"
+        if risk_config_path.exists():
+            with open(risk_config_path) as f:
+                self.risk_config = json.load(f)
+        else:
+            self.risk_config = {}
 
     @property
     def yolo_loaded(self) -> list[str]:
@@ -69,6 +87,14 @@ class MammographyInference:
         loaded = []
         if self.patch_mass: loaded.append("mass")
         if self.patch_calc: loaded.append("calc")
+        return loaded
+
+    # --- RISK MODEL --- New property
+    @property
+    def risk_loaded(self) -> list[str]:
+        loaded = []
+        if self.backbone_mass and self.risk_mass: loaded.append("mass")
+        if self.backbone_calc and self.risk_calc: loaded.append("calc")
         return loaded
 
     def _load_model(self, filename: str):
@@ -366,6 +392,110 @@ class MammographyInference:
         return keep
 
     # ------------------------------------------------------------------
+    # Risk model inference  --- RISK MODEL (new section) ---
+    # ------------------------------------------------------------------
+
+    def _encode_ehr(self, ehr_data: Optional[dict]) -> np.ndarray:
+        """Encode EHR data into a normalized [1, 4] float32 array.
+
+        Order: [age_norm, density_norm, prior_biopsy, family_history]
+        All values in [0, 1].
+        """
+        if ehr_data is None:
+            ehr_data = {}
+
+        # Age: normalize to 0-1 (assume clinical range 30-90)
+        age = ehr_data.get("age")
+        if age is not None:
+            age_norm = float(np.clip((float(age) - 30) / 60, 0, 1))
+        else:
+            age_norm = 0.5  # unknown
+
+        # Breast density: A→0, B→0.33, C→0.67, D→1.0
+        density = ehr_data.get("breast_density")
+        density_map = {"A": 0.0, "B": 0.33, "C": 0.67, "D": 1.0}
+        if density and str(density).upper() in density_map:
+            density_norm = density_map[str(density).upper()]
+        else:
+            density_norm = 0.5  # unknown
+
+        # Binary features
+        prior_biopsy = 1.0 if ehr_data.get("prior_biopsy") else 0.0
+        family_history = 1.0 if ehr_data.get("family_history") else 0.0
+
+        return np.array([[age_norm, density_norm, prior_biopsy, family_history]], dtype=np.float32)
+
+    def _run_risk_model(self, img_gray: np.ndarray, detection: dict,
+                        backbone_model, risk_mlp_model,
+                        ehr_data: Optional[dict]) -> Optional[float]:
+        """Run risk prediction on a single detection.
+
+        1. Crop the detected region from the mammogram
+        2. Resize to patch_size, normalize
+        3. Run through backbone → 1280-dim features
+        4. Encode EHR → 4-dim vector
+        5. Run through risk MLP → logit → sigmoid → probability
+
+        Returns: risk probability (0-1) or None if something fails.
+        """
+        if backbone_model is None or risk_mlp_model is None:
+            return None
+
+        ps = self.config.get("patch_size", 224)
+        mean = np.array(self.config.get("normalize_mean", [0.485, 0.456, 0.406]))
+        std = np.array(self.config.get("normalize_std", [0.229, 0.224, 0.225]))
+
+        # Crop detection region
+        x1, y1, x2, y2 = [int(v) for v in detection["box"]]
+        h, w = img_gray.shape[:2]
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w, x2), min(h, y2)
+
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        crop = img_gray[y1:y2, x1:x2]
+
+        # Resize to patch size, convert to RGB, normalize
+        crop_img = Image.fromarray(crop).convert("RGB").resize(
+            (ps, ps), Image.Resampling.BILINEAR
+        )
+        crop_arr = np.array(crop_img).astype(np.float32) / 255.0
+        crop_norm = (crop_arr - mean) / std
+        crop_chw = np.transpose(crop_norm, (2, 0, 1)).astype(np.float32)
+        crop_input = crop_chw[np.newaxis, ...]  # [1, 3, 224, 224]
+
+        try:
+            # Extract features from backbone
+            feat_in = backbone_model.get_inputs()[0].name
+            feat_out = backbone_model.get_outputs()[0].name
+            features = backbone_model.run([feat_out], {feat_in: crop_input})[0]
+            # features shape: [1, 1280]
+
+            # Encode EHR
+            ehr_encoded = self._encode_ehr(ehr_data)
+            # ehr_encoded shape: [1, 4]
+
+            # Match risk MLP input names dynamically
+            risk_inputs = {}
+            for inp in risk_mlp_model.get_inputs():
+                if "image" in inp.name or "feat" in inp.name:
+                    risk_inputs[inp.name] = features
+                elif "ehr" in inp.name:
+                    risk_inputs[inp.name] = ehr_encoded
+
+            risk_out = risk_mlp_model.get_outputs()[0].name
+            logit = risk_mlp_model.run([risk_out], risk_inputs)[0]
+
+            # Sigmoid
+            probability = float(1.0 / (1.0 + np.exp(-logit.flatten()[0])))
+            return probability
+
+        except Exception as e:
+            print(f"  ⚠ Risk model inference failed: {e}")
+            return None
+
+    # ------------------------------------------------------------------
     # Main inference pipeline
     # ------------------------------------------------------------------
 
@@ -378,9 +508,10 @@ class MammographyInference:
         1. Load and preprocess image
         2. Run YOLO detectors (mass + calc) if available
         3. Run patch classifiers (mass + calc) if available
-        4. Merge all detections
-        5. Compute overall classification
-        6. Return structured results
+        4. Run risk model on the top detection if available
+        5. Merge all detections
+        6. Compute overall classification
+        7. Return structured results
 
         Returns dict matching the AnalysisResponse schema.
         """
@@ -429,10 +560,47 @@ class MammographyInference:
         # Overall classification
         classification, class_conf = self._compute_classification(all_detections)
 
-        # Risk score (placeholder — needs EHR fusion model)
-        risk_score, risk_level = self._compute_risk(
-            classification, class_conf, ehr_data
-        )
+        # --- RISK MODEL --- Try trained model first, fall back to heuristic
+        risk_score = None
+        risk_level = None
+        risk_model_type = "none"
+
+        if all_detections:
+            top_detection = max(all_detections, key=lambda d: d["confidence"])
+
+            # Pick the right backbone + risk MLP based on detection type
+            if "mass" in top_detection["label"]:
+                backbone = self.backbone_mass
+                risk_mlp = self.risk_mass
+            else:
+                backbone = self.backbone_calc
+                risk_mlp = self.risk_calc
+
+            # Try trained risk model
+            risk_prob = self._run_risk_model(
+                img_gray, top_detection, backbone, risk_mlp, ehr_data
+            )
+
+            if risk_prob is not None:
+                # Scale malignancy probability to a 5-year risk range
+                risk_score = round(risk_prob * 0.35, 4)  # cap ~35%
+                risk_model_type = "trained"
+                models_used.append("risk_model")
+            else:
+                # Fall back to heuristic
+                risk_score, _ = self._compute_risk_heuristic(
+                    classification, class_conf, ehr_data
+                )
+                risk_model_type = "heuristic"
+
+            # Determine risk level from score
+            if risk_score is not None:
+                if risk_score > 0.20:
+                    risk_level = "high"
+                elif risk_score > 0.10:
+                    risk_level = "elevated"
+                else:
+                    risk_level = "average"
 
         return {
             "width": width,
@@ -442,9 +610,7 @@ class MammographyInference:
             "classification_confidence": class_conf,
             "risk_score": risk_score,
             "risk_level": risk_level,
-            # Until a trained EHR-fusion risk model is wired in, clearly label
-            # this value as a heuristic so the frontend can surface the caveat.
-            "risk_model_type": "heuristic",
+            "risk_model_type": risk_model_type,
             "heatmap": combined_heatmap,
             "model_info": {
                 "models_used": models_used,
@@ -452,7 +618,7 @@ class MammographyInference:
                 "patch_size": self.config.get("patch_size", 224),
                 "confidence_threshold": confidence_threshold,
                 "compute": "CPU",
-                "risk_model_type": "heuristic",
+                "risk_model_type": risk_model_type,
             },
         }
 
@@ -486,13 +652,10 @@ class MammographyInference:
         else:
             return "normal", 0.0
 
-    def _compute_risk(self, classification: str, confidence: float,
-                      ehr_data: Optional[dict]) -> tuple[Optional[float], Optional[str]]:
+    def _compute_risk_heuristic(self, classification: str, confidence: float,
+                                ehr_data: Optional[dict]) -> tuple[Optional[float], Optional[str]]:
         """
-        Placeholder risk calculation.
-
-        A real implementation would use a trained risk model with EHR fusion.
-        This uses a simple heuristic for demo purposes.
+        Heuristic risk calculation — used when trained risk model isn't available.
         """
         if classification == "normal":
             return None, None
