@@ -77,13 +77,13 @@ export function RightPanel({
                     {classification.label}
                   </p>
                   <p className="text-[var(--color-text-primary)] text-lg font-bold">
-                    {classification.confidence.toFixed(1)}%
+                    {(classification.confidence * 100).toFixed(1)}%
                   </p>
                 </div>
                 <div className="h-1.5 bg-[var(--color-bg-panel)] rounded-full overflow-hidden mb-3">
                   <div 
                     className="h-full rounded-full bg-gradient-to-r from-[#ffb74d] to-[#ef5350]"
-                    style={{ width: `${classification.confidence}%` }}
+                    style={{ width: `${classification.confidence * 100}%` }}
                   />
                 </div>
                 <div className="flex justify-between text-[9px] text-[var(--color-text-secondary)] uppercase mb-3">
