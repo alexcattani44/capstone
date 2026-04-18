@@ -3,7 +3,12 @@ interface RiskGaugeProps {
 }
 
 export function RiskGauge({ percentage }: RiskGaugeProps) {
-  const clampedPct = Math.max(0, Math.min(100, percentage));
+  // percentage comes in as e.g. 18.4 meaning 18.4%
+  const clampedPct = Math.max(0, Math.min(35, percentage));
+
+  // Map the 0-35% risk range to 0-100% of the gauge arc
+  // (risk scores are capped at ~35% by inference.py)
+  const gaugePosition = (clampedPct / 35) * 100;
 
   // Arc geometry — 180° semicircle
   const cx = 100;
@@ -11,16 +16,16 @@ export function RiskGauge({ percentage }: RiskGaugeProps) {
   const r = 70;
   const strokeWidth = 12;
 
-  // Convert percentage to angle (0% = left, 100% = right)
-  const angle = (clampedPct / 100) * Math.PI; // 0 to π
-  const needleAngle = Math.PI - angle; // flip for SVG coords
+  // Convert gauge position to angle (0% = left, 100% = right)
+  const angle = (gaugePosition / 100) * Math.PI;
+  const needleAngle = Math.PI - angle;
 
   // Needle tip position
   const needleLen = r - strokeWidth / 2 - 4;
   const nx = cx + needleLen * Math.cos(needleAngle);
   const ny = cy - needleLen * Math.sin(needleAngle);
 
-  // Arc helper: describes a semicircle arc from startAngle to endAngle
+  // Arc helper
   const describeArc = (startPct: number, endPct: number) => {
     const startA = Math.PI - (startPct / 100) * Math.PI;
     const endA = Math.PI - (endPct / 100) * Math.PI;
@@ -32,31 +37,31 @@ export function RiskGauge({ percentage }: RiskGaugeProps) {
     return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
-  // Color zones: green (0-30%), yellow (30-60%), red (60-100%)
+  // Color zones mapped to gauge percentages:
+  //   0-10% risk  → "Average"  → 0-28.6% of gauge (10/35)
+  //   10-20% risk → "Elevated" → 28.6-57.1% of gauge (10/35)
+  //   20-35% risk → "High"     → 57.1-100% of gauge (15/35)
   const zones = [
-    { start: 0, end: 30, color: "#2E7D32" },
-    { start: 30, end: 60, color: "#F9A825" },
-    { start: 60, end: 100, color: "#C62828" },
+    { start: 0, end: (10 / 35) * 100, color: "#2E7D32" },       // Average (green)
+    { start: (10 / 35) * 100, end: (20 / 35) * 100, color: "#F9A825" },  // Elevated (yellow)
+    { start: (20 / 35) * 100, end: 100, color: "#C62828" },      // High (red)
   ];
 
-  // Active glow color based on percentage
+  // Glow color based on risk percentage (actual %, not gauge position)
   const glowColor =
-    clampedPct < 30 ? "#66BB6A" : clampedPct < 60 ? "#FFB74D" : "#EF5350";
+    percentage < 10 ? "#66BB6A" : percentage < 20 ? "#FFB74D" : "#EF5350";
+
+  // Tick positions at the threshold boundaries: 0%, 10%, 20%, 35%
+  const tickValues = [0, 10, 20, 35];
+  const tickGaugePositions = tickValues.map((v) => (v / 35) * 100);
 
   return (
     <div className="flex flex-col items-center justify-center w-full">
-      <svg viewBox="0 0 200 110" className="w-[180px] h-[120px]">
+      <svg viewBox="0 0 200 120" className="w-[180px] h-[130px]">
         {/* Glow filter */}
         <defs>
           <filter id="needleGlow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <filter id="arcGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -86,8 +91,8 @@ export function RiskGauge({ percentage }: RiskGaugeProps) {
           />
         ))}
 
-        {/* Tick marks */}
-        {[0, 25, 50, 75, 100].map((tick) => {
+        {/* Tick marks at threshold boundaries */}
+        {tickGaugePositions.map((tick, i) => {
           const tickAngle = Math.PI - (tick / 100) * Math.PI;
           const innerR = r + strokeWidth / 2 + 2;
           const outerR = r + strokeWidth / 2 + 6;
@@ -95,17 +100,63 @@ export function RiskGauge({ percentage }: RiskGaugeProps) {
           const iy = cy - innerR * Math.sin(tickAngle);
           const ox = cx + outerR * Math.cos(tickAngle);
           const oy = cy - outerR * Math.sin(tickAngle);
+
+          // Label position
+          const labelR = r + strokeWidth / 2 + 14;
+          const lx = cx + labelR * Math.cos(tickAngle);
+          const ly = cy - labelR * Math.sin(tickAngle);
+
           return (
-            <line
-              key={tick}
-              x1={ix}
-              y1={iy}
-              x2={ox}
-              y2={oy}
-              stroke="var(--color-text-secondary, #6b7a8d)"
-              strokeWidth={1}
-              opacity={0.5}
-            />
+            <g key={i}>
+              <line
+                x1={ix}
+                y1={iy}
+                x2={ox}
+                y2={oy}
+                stroke="var(--color-text-secondary, #6b7a8d)"
+                strokeWidth={1}
+                opacity={0.5}
+              />
+              <text
+                x={lx}
+                y={ly}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="var(--color-text-secondary, #6b7a8d)"
+                fontSize="7"
+                opacity={0.7}
+              >
+                {tickValues[i]}%
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Zone labels along the arc */}
+        {[
+          { label: "Low", pct: (5 / 35) * 100 },
+          { label: "Elevated", pct: (15 / 35) * 100 },
+          { label: "High", pct: (27.5 / 35) * 100 },
+        ].map(({ label, pct }) => {
+          const a = Math.PI - (pct / 100) * Math.PI;
+          const labelR = r - strokeWidth / 2 - 10;
+          const lx = cx + labelR * Math.cos(a);
+          const ly = cy - labelR * Math.sin(a);
+          return (
+            <text
+              key={label}
+              x={lx}
+              y={ly}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="var(--color-text-secondary, #6b7a8d)"
+              fontSize="7"
+              fontWeight="600"
+              letterSpacing="0.5"
+              textTransform="uppercase"
+            >
+              {label}
+            </text>
           );
         })}
 
