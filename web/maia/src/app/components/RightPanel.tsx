@@ -112,7 +112,7 @@ export function RightPanel({
               </div>
               <div className="p-3.5">
                 <RiskGauge percentage={risk.percentage} />
-                <div className="flex justify-between text-[9px] text-[var(--color-text-secondary)] uppercase tracking-[0.8px] mt-1">
+                <div className="flex justify-between pt-2 text-[9px] text-[var(--color-text-secondary)] uppercase tracking-[0.8px]">
                   <span>Low</span>
                   <span>Moderate</span>
                   <span>High</span>
