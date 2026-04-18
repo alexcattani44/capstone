@@ -1,0 +1,20 @@
+# OpenMAIA Backend Dependencies
+# Install: pip install -r requirements.txt
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6     # for file uploads
+
+# Inference
+onnxruntime>=1.16.0         # CPU-only ONNX inference
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# Optional: DICOM support (uncomment if handling .dcm files)
+# pydicom>=2.4.0
+
+# Optional: Grad-CAM (if generating heatmaps from PyTorch models instead of ONNX)
+# torch>=2.0.0
+# pytorch-grad-cam>=1.5.0
+# timm>=0.9.0

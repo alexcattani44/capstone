@@ -87,3 +87,7 @@ mlruns/
 # Logs
 *.log
 *.tmp
+
+# Web
+
+web/maia/node_modules/*
