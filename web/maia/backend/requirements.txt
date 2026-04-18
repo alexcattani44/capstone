@@ -2,17 +2,17 @@
 # Install: pip install -r requirements.txt
 
 # Web framework
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6     # for file uploads
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9     # for file uploads
 
 # Inference
 onnxruntime>=1.16.0         # CPU-only ONNX inference
 numpy>=1.24.0
 Pillow>=10.0.0
 
-# Optional: DICOM support (uncomment if handling .dcm files)
-# pydicom>=2.4.0
+# DICOM support
+pydicom>=2.4.0
 
 # Optional: Grad-CAM (if generating heatmaps from PyTorch models instead of ONNX)
 # torch>=2.0.0

@@ -2,96 +2,163 @@
 OpenMAIA — FastAPI Backend
 Serves the React frontend and runs mammography inference.
 
-Run:
+Run locally:
     uvicorn app:app --host 0.0.0.0 --port 8000
 
-Project layout:
-    openmaia/
+Configuration (environment variables):
+    MAIA_MODELS_DIR     Path to ONNX models directory (default: ../models relative to this file)
+    MAIA_UPLOADS_DIR    Temp upload directory (default: ../uploads)
+    MAIA_FRONTEND_DIR   Optional built frontend to serve (default: ../frontend/build, then ../dist)
+    MAIA_CORS_ORIGINS   Comma-separated list of allowed CORS origins
+                        (default: http://localhost:3000,http://localhost:5173,http://localhost:8000)
+    MAIA_MAX_UPLOAD_MB  Max accepted upload size in MB (default: 25)
+    MAIA_LOG_LEVEL      Logging level (default: INFO)
+
+Expected project layout:
+    web/maia/
     ├── backend/
     │   ├── app.py              ← this file
     │   └── inference.py        ← model loading + inference logic
-    ├── frontend/
-    │   └── build/              ← React production build (npm run build)
-    ├── models/
-    │   ├── mass_yolo.onnx
-    │   ├── calc_yolo.onnx
-    │   ├── mass_patch.onnx
-    │   ├── calc_patch.onnx
-    │   └── inference_config.json
+    ├── dist/ or frontend/build/  ← React production build (optional, served if present)
+    ├── models/                 ← ONNX files
     └── uploads/                ← temp directory for uploaded images
 """
 
-import os
-import uuid
-import time
-import json
 import base64
-from pathlib import Path
+import logging
+import os
+import time
+import uuid
+from contextlib import asynccontextmanager
 from io import BytesIO
-
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pathlib import Path
 from typing import Optional
+
 import numpy as np
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
+from pydantic import BaseModel, Field
 
 from inference import MammographyInference
 
 # ---------------------------------------------------------------------------
-# App setup
+# Configuration
 # ---------------------------------------------------------------------------
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+def _env_path(var: str, default: Path) -> Path:
+    raw = os.environ.get(var)
+    return Path(raw).expanduser().resolve() if raw else default
+
+MODELS_DIR = _env_path("MAIA_MODELS_DIR", BASE_DIR / "models")
+UPLOADS_DIR = _env_path("MAIA_UPLOADS_DIR", BASE_DIR / "uploads")
+
+# Frontend build: prefer MAIA_FRONTEND_DIR, then Vite's dist/, then CRA's frontend/build/
+_frontend_env = os.environ.get("MAIA_FRONTEND_DIR")
+if _frontend_env:
+    FRONTEND_DIR: Optional[Path] = Path(_frontend_env).expanduser().resolve()
+elif (BASE_DIR / "dist").exists():
+    FRONTEND_DIR = BASE_DIR / "dist"
+elif (BASE_DIR / "frontend" / "build").exists():
+    FRONTEND_DIR = BASE_DIR / "frontend" / "build"
+else:
+    FRONTEND_DIR = None
+
+DEFAULT_ORIGINS = "http://localhost:3000,http://localhost:5173,http://localhost:8000"
+CORS_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("MAIA_CORS_ORIGINS", DEFAULT_ORIGINS).split(",")
+    if o.strip()
+]
+
+MAX_UPLOAD_MB = int(os.environ.get("MAIA_MAX_UPLOAD_MB", "25"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+LOG_LEVEL = os.environ.get("MAIA_LOG_LEVEL", "INFO").upper()
+
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger("maia")
+
+# ---------------------------------------------------------------------------
+# App lifespan — load models once at startup
+# ---------------------------------------------------------------------------
+
+engine: Optional[MammographyInference] = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global engine
+    logger.info("Loading inference engine from %s", MODELS_DIR)
+    try:
+        engine = MammographyInference(MODELS_DIR)
+        logger.info(
+            "Inference engine ready (yolo=%s, patch=%s)",
+            engine.yolo_loaded,
+            engine.patch_loaded,
+        )
+    except Exception as exc:  # noqa: BLE001 — log any startup failure and keep app alive
+        logger.exception("Failed to initialize inference engine: %s", exc)
+        engine = None
+    yield
+    logger.info("Shutting down")
+
 
 app = FastAPI(
     title="OpenMAIA",
     description="Open-source Mammography AI Assistant — inference API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
-# CORS — allow React dev server (localhost:3000) during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",    # React dev server
-        "http://localhost:5173",    # Vite dev server
-        "http://localhost:8000",    # same origin
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Paths
-BASE_DIR = Path(__file__).resolve().parent.parent
-MODELS_DIR = BASE_DIR / "models"
-UPLOADS_DIR = BASE_DIR / "uploads"
-FRONTEND_DIR = BASE_DIR / "frontend" / "build"
 
-UPLOADS_DIR.mkdir(exist_ok=True)
-
-# ---------------------------------------------------------------------------
-# Load models at startup
-# ---------------------------------------------------------------------------
-
-engine = None
-
-
-@app.on_event("startup")
-async def load_models():
-    """Load ONNX models into memory once at startup."""
-    global engine
-    print("Loading inference engine...")
-    engine = MammographyInference(MODELS_DIR)
-    print(f"✓ Inference engine ready")
-    print(f"  YOLO models: {engine.yolo_loaded}")
-    print(f"  Patch models: {engine.patch_loaded}")
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        raise
+    duration_ms = (time.time() - start) * 1000
+    logger.info(
+        "%s %s → %d (%.1f ms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
 
 
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".dcm", ".dicom"}
+ALLOWED_DENSITIES = {"A", "B", "C", "D"}
+
 
 class Detection(BaseModel):
     """A single detected region."""
@@ -107,47 +174,66 @@ class Detection(BaseModel):
 
 class AnalysisResponse(BaseModel):
     """Full analysis result returned to the frontend."""
-    # Image metadata
     image_id: str
     filename: str
     width: int
     height: int
 
-    # Detections from both models
     detections: list[Detection]
 
-    # Classification summary
-    classification: str                 # 'benign', 'malignant', 'uncertain'
-    classification_confidence: float    # 0-1
+    classification: str
+    classification_confidence: float
 
-    # Risk (placeholder — requires EHR fusion model)
     risk_score: Optional[float] = None
     risk_level: Optional[str] = None
+    risk_model_type: str = Field(
+        default="heuristic",
+        description="'heuristic' — rule-based placeholder; 'model' — trained risk model",
+    )
 
-    # Heatmap as base64 PNG (from patch classifier probability map)
     heatmap_base64: Optional[str] = None
 
-    # Timing
     inference_time_ms: float
     model_info: dict
+
+
+class HealthResponse(BaseModel):
+    status: str
+    models: dict
+    any_models_loaded: bool
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthResponse)
 async def health():
     """Health check — also reports which models are loaded."""
-    return {
-        "status": "ok",
-        "models": {
-            "yolo_mass": engine.yolo_mass is not None if engine else False,
-            "yolo_calc": engine.yolo_calc is not None if engine else False,
-            "patch_mass": engine.patch_mass is not None if engine else False,
-            "patch_calc": engine.patch_calc is not None if engine else False,
-        }
+    if engine is None:
+        return HealthResponse(
+            status="degraded",
+            models={
+                "yolo_mass": False,
+                "yolo_calc": False,
+                "patch_mass": False,
+                "patch_calc": False,
+            },
+            any_models_loaded=False,
+        )
+
+    models = {
+        "yolo_mass": engine.yolo_mass is not None,
+        "yolo_calc": engine.yolo_calc is not None,
+        "patch_mass": engine.patch_mass is not None,
+        "patch_calc": engine.patch_calc is not None,
     }
+    any_loaded = any(models.values())
+    return HealthResponse(
+        status="ok" if any_loaded else "degraded",
+        models=models,
+        any_models_loaded=any_loaded,
+    )
 
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
@@ -157,8 +243,8 @@ async def analyze(
     use_yolo: bool = Query(True),
     use_patch: bool = Query(True),
     # Optional EHR fields for risk calculation
-    patient_age: Optional[int] = Query(None),
-    breast_density: Optional[str] = Query(None),
+    patient_age: Optional[int] = Query(None, ge=0, le=120),
+    breast_density: Optional[str] = Query(None, max_length=1),
     prior_biopsy: Optional[bool] = Query(None),
     family_history: Optional[bool] = Query(None),
 ):
@@ -167,53 +253,82 @@ async def analyze(
 
     Accepts a mammogram image (DICOM, PNG, JPEG) and returns:
     - Bounding box detections from YOLO and/or patch classifier
-    - Classification (benign/malignant) with confidence
+    - Classification (benign/malignant/suspicious/normal) with confidence
     - Probability heatmap as base64 PNG
+    - Heuristic 5-year risk score (labeled as such)
     - Inference timing
-
-    The React frontend calls this with FormData containing the image file
-    and optional query parameters for thresholds and EHR data.
     """
     if engine is None:
-        raise HTTPException(503, "Models not loaded yet")
+        raise HTTPException(503, "Inference engine not initialized")
 
-    # Validate file type
-    allowed_types = {"image/jpeg", "image/png", "image/dicom", "application/dicom",
-                     "application/octet-stream"}
-    # Be lenient with content type — DICOM files often come as octet-stream
+    if not any([engine.yolo_mass, engine.yolo_calc, engine.patch_mass, engine.patch_calc]):
+        raise HTTPException(503, "No models loaded — backend is running but cannot analyze")
+
+    # Validate filename and extension
+    if not file.filename:
+        raise HTTPException(400, "No filename provided")
+
     ext = Path(file.filename).suffix.lower()
-    allowed_extensions = {".jpg", ".jpeg", ".png", ".dcm", ".dicom"}
-    if ext not in allowed_extensions:
-        raise HTTPException(400, f"Unsupported file type: {ext}. Use JPEG, PNG, or DICOM.")
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            400,
+            f"Unsupported file type: {ext or '(none)'}. Use JPEG, PNG, or DICOM.",
+        )
 
-    # Save upload temporarily
+    # Validate density if provided (query constraint above limits length only)
+    density = breast_density.upper() if breast_density else None
+    if density is not None and density not in ALLOWED_DENSITIES:
+        raise HTTPException(
+            400,
+            f"Invalid breast_density: {breast_density!r}. Use one of A, B, C, D.",
+        )
+
+    # Read and size-check contents before touching disk
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(400, "Empty file upload")
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            413,
+            f"File too large: {len(contents) / 1024 / 1024:.1f} MB "
+            f"(max {MAX_UPLOAD_MB} MB)",
+        )
+
+    # Persist to a temp path under UPLOADS_DIR
     image_id = str(uuid.uuid4())[:8]
     upload_path = UPLOADS_DIR / f"{image_id}{ext}"
 
-    contents = await file.read()
-    with open(upload_path, "wb") as f:
-        f.write(contents)
+    try:
+        upload_path.write_bytes(contents)
+    except OSError as exc:
+        logger.exception("Failed to write upload %s", upload_path)
+        raise HTTPException(500, f"Could not save upload: {exc}") from exc
 
     try:
-        # Run inference
         t0 = time.time()
-
-        result = engine.run(
-            image_path=str(upload_path),
-            confidence_threshold=confidence_threshold,
-            use_yolo=use_yolo,
-            use_patch=use_patch,
-            ehr_data={
-                "age": patient_age,
-                "breast_density": breast_density,
-                "prior_biopsy": prior_biopsy,
-                "family_history": family_history,
-            }
-        )
+        try:
+            result = engine.run(
+                image_path=str(upload_path),
+                confidence_threshold=confidence_threshold,
+                use_yolo=use_yolo,
+                use_patch=use_patch,
+                ehr_data={
+                    "age": patient_age,
+                    "breast_density": density,
+                    "prior_biopsy": prior_biopsy,
+                    "family_history": family_history,
+                },
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(400, f"Could not read image: {exc}") from exc
+        except ValueError as exc:
+            raise HTTPException(400, f"Invalid image: {exc}") from exc
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Inference failed on %s", file.filename)
+            raise HTTPException(500, f"Inference failed: {exc}") from exc
 
         inference_ms = (time.time() - t0) * 1000
 
-        # Build response
         detections = [
             Detection(
                 x1=d["box"][0],
@@ -227,12 +342,11 @@ async def analyze(
             for d in result["detections"]
         ]
 
-        # Encode heatmap as base64 PNG
-        heatmap_b64 = None
+        # Encode heatmap as base64 PNG (grayscale; frontend colormaps it)
+        heatmap_b64: Optional[str] = None
         if result.get("heatmap") is not None:
             heatmap = result["heatmap"]
-            # Normalize to 0-255 and create a color-mapped image
-            heatmap_norm = (heatmap * 255).astype(np.uint8)
+            heatmap_norm = np.clip(heatmap * 255, 0, 255).astype(np.uint8)
             heatmap_img = Image.fromarray(heatmap_norm, mode="L")
             buffer = BytesIO()
             heatmap_img.save(buffer, format="PNG")
@@ -248,49 +362,70 @@ async def analyze(
             classification_confidence=result["classification_confidence"],
             risk_score=result.get("risk_score"),
             risk_level=result.get("risk_level"),
+            risk_model_type=result.get("risk_model_type", "heuristic"),
             heatmap_base64=heatmap_b64,
             inference_time_ms=round(inference_ms, 1),
             model_info=result["model_info"],
         )
 
     finally:
-        # Clean up uploaded file
-        if upload_path.exists():
-            upload_path.unlink()
+        try:
+            if upload_path.exists():
+                upload_path.unlink()
+        except OSError:
+            logger.warning("Could not delete temp upload %s", upload_path)
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 # ---------------------------------------------------------------------------
 # Serve React frontend (production build)
 # ---------------------------------------------------------------------------
 
-# In production: Flask/FastAPI serves the React build as static files
-# In development: React dev server runs separately on port 3000
+if FRONTEND_DIR and FRONTEND_DIR.exists():
+    logger.info("Serving frontend from %s", FRONTEND_DIR)
 
-if FRONTEND_DIR.exists():
-    # Serve static assets (JS, CSS, images)
-    app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
+    # Vite emits assets/ (not static/). Mount it if present.
+    assets_dir = FRONTEND_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    # Catch-all: serve index.html for any non-API route (React Router support)
+    static_dir = FRONTEND_DIR / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
     @app.get("/{full_path:path}")
     async def serve_react(full_path: str):
-        """Serve React app for any non-API route."""
-        # Don't intercept API routes
+        """Serve the built SPA, letting the router handle unknown routes."""
         if full_path.startswith("api/"):
             raise HTTPException(404)
 
-        # Try to serve the exact file first (for favicon.ico, manifest.json, etc.)
-        file_path = FRONTEND_DIR / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
+        candidate = FRONTEND_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
 
-        # Otherwise serve index.html (let React Router handle the route)
-        return FileResponse(FRONTEND_DIR / "index.html")
+        index = FRONTEND_DIR / "index.html"
+        if index.exists():
+            return FileResponse(index)
+        raise HTTPException(404)
 else:
     @app.get("/")
     async def no_frontend():
         return {
             "message": "OpenMAIA API is running. No frontend build found.",
-            "hint": "Run 'npm run build' in frontend/ and copy build/ to frontend/build/",
+            "hint": "Run 'npm run build' in web/maia/ to produce dist/, "
+                    "or set MAIA_FRONTEND_DIR.",
             "docs": "/docs",
         }
 
@@ -301,4 +436,6 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

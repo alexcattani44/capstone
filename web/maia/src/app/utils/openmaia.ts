@@ -1,10 +1,17 @@
-/**
- * OpenMAIA — API client for the React frontend
- */
+ /**
+  * OpenMAIA — API client for the React frontend
+  *
+  * The base URL is read from Vite's environment:
+  *   VITE_API_BASE=https://my-maia-backend.example.com
+  *
+  * If not set, defaults to http://localhost:8000 for local dev. In production
+  * builds (e.g. Vercel) you MUST set VITE_API_BASE before `npm run build`, or
+  * the deployed app will try to call localhost.
+  */
 
-// const API_BASE =
-//   process.env.NODE_ENV === "development" ? "http://localhost:8000" : "";
-const API_BASE = "http://localhost:8000";
+const API_BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ||
+  "http://localhost:8000";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -38,6 +45,8 @@ export interface AnalysisResult {
   classification_confidence: number;
   risk_score: number | null;
   risk_level: string | null;
+  /** "heuristic" until a trained EHR-fusion risk model is wired in. */
+  risk_model_type: "heuristic" | "model";
   heatmap_base64: string | null;
   inference_time_ms: number;
   model_info: ModelInfo;
