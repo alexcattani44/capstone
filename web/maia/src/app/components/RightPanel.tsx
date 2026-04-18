@@ -6,7 +6,7 @@ interface Detection {
   type: string;
   confidence: number;
   color: string;
-  iou: number;
+  source: string;
 }
 
 interface RightPanelProps {
