@@ -75,10 +75,10 @@ export default function App() {
   const [showConfidenceLabels, setShowConfidenceLabels] = useState(true);
 
   // ---- EHR form ----
-  const [age, setAge] = useState("56");
-  const [density, setDensity] = useState("c");
-  const [priorBiopsy, setPriorBiopsy] = useState("no");
-  const [familyHistory, setFamilyHistory] = useState("yes");
+  const [age, setAge] = useState("");
+  const [density, setDensity] = useState("");
+  const [priorBiopsy, setPriorBiopsy] = useState("");
+  const [familyHistory, setFamilyHistory] = useState("");
 
   // ---- UI ----
   const [activeTab, setActiveTab] = useState<
