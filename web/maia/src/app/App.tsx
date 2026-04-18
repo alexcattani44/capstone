@@ -202,6 +202,22 @@ export default function App() {
     resetAnalysis();
   };
 
+  const handleClear = () => {
+    setSelectedFile(null);
+    setImageUrl("");
+    setImageLoaded(false);
+    setFileName("No image loaded");
+    setMetadata([
+      { label: "Patient ID", value: "—" },
+      { label: "Modality", value: "—" },
+      { label: "Laterality", value: "—" },
+      { label: "View", value: "—" },
+      { label: "Image Size", value: "—" },
+      { label: "Bit Depth", value: "—" },
+    ]);
+    resetAnalysis();
+  };
+
   const handleLoadDemo = () => {
     setImageLoaded(true);
     setImageUrl(
@@ -268,6 +284,7 @@ export default function App() {
             priorBiopsy={priorBiopsy}
             familyHistory={familyHistory}
             onFileSelect={handleFileSelect}
+            onClear={handleClear}
             onConfidenceThresholdChange={setConfidenceThreshold}
             onHeatmapIntensityChange={setHeatmapIntensity}
             onShowBoundingBoxesChange={setShowBoundingBoxes}

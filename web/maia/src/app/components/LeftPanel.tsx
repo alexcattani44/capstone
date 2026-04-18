@@ -16,6 +16,7 @@ interface LeftPanelProps {
   priorBiopsy: string;
   familyHistory: string;
   onFileSelect: (file: File) => void;
+  onClear: () => void;
   onConfidenceThresholdChange: (value: number) => void;
   onHeatmapIntensityChange: (value: number) => void;
   onShowBoundingBoxesChange: (value: boolean) => void;
@@ -42,6 +43,7 @@ export function LeftPanel({
   priorBiopsy,
   familyHistory,
   onFileSelect,
+  onClear,
   onConfidenceThresholdChange,
   onHeatmapIntensityChange,
   onShowBoundingBoxesChange,
@@ -62,9 +64,17 @@ export function LeftPanel({
     <div className="h-full overflow-y-auto custom-scrollbar border-r border-[var(--color-border-default)] p-6 flex flex-col gap-5">
       {hasFile ? (
         <div className="flex flex-col gap-2 w-full">
-          <h3 className="text-[var(--color-text-secondary)] text-[10px] font-bold uppercase tracking-[1.8px]">
-            Image
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-[var(--color-text-secondary)] text-[10px] font-bold uppercase tracking-[1.8px]">
+              Image
+            </h3>
+            <button
+              onClick={onClear}
+              className="text-[var(--color-text-secondary)] hover:text-red-400 text-xs transition-colors"
+            >
+              ✕ Clear
+            </button>
+          </div>
           <FileCard
             fileName={
               metadata[0]?.label === "Patient ID"
@@ -75,7 +85,7 @@ export function LeftPanel({
           />
         </div>
       ) : (
-        <FileUpload onFileSelect={onFileSelect} />
+        <FileUpload onFileSelect={onFileSelect}/>
       )}
       <MetadataPanel metadata={metadata} />
       <DisplayControls
