@@ -81,7 +81,7 @@ export function CenterPanel({
       </div>
 
       {/* Image viewer */}
-      <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden min-h-0">
         {/* Progress bar */}
         {progress != null && progress < 100 && (
           <div className="absolute top-0 left-0 right-0 z-20">
@@ -100,15 +100,16 @@ export function CenterPanel({
         )}
 
         {imageLoaded && imageUrl ? (
-          <div className="relative max-w-full max-h-full">
+          <div className="relative w-full h-full flex items-center justify-center">
             {/* Mammogram image */}
             <img
               src={imageUrl}
               alt="Mammogram"
               className="max-w-full max-h-full object-contain"
+              style={{ minHeight: '200px' }}
             />
 
-            {/* Heatmap overlay */}
+            {/* Heatmap overlay — matches the image, not the container */}
             {showHeatOverlay && (
               <img
                 src={`data:image/png;base64,${heatmapBase64}`}

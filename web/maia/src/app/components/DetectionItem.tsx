@@ -3,10 +3,10 @@ interface DetectionItemProps {
   type: string;
   confidence: number;
   color: string;
-  iou: number;
+  source: string
 }
 
-export function DetectionItem({ name, type, confidence, iou, color }: DetectionItemProps) {
+export function DetectionItem({ name, type, confidence, source, color }: DetectionItemProps) {
   return (
     <div className="flex items-center gap-2.5 py-2 border-b border-[rgba(42,53,68,0.4)] last:border-0">
       <div 
@@ -18,7 +18,7 @@ export function DetectionItem({ name, type, confidence, iou, color }: DetectionI
           {name}
         </p>
         <p className="text-[var(--color-text-secondary)] text-[10px]">
-          {type} · IoU {iou.toFixed(2)}
+          {type} · {source}
         </p>
       </div>
       <span 

@@ -7,37 +7,33 @@ interface BoundingBoxProps {
   confidence: number;
   color: string;
   showLabel?: boolean;
+  index?: number;
 }
 
-export function BoundingBox({
-  x,
-  y,
-  width,
-  height,
-  label,
-  confidence,
-  color,
-  showLabel = true,
-}: BoundingBoxProps) {
+export function BoundingBox({ x, y, width, height, label, confidence, color, showLabel = true, index = 0 }: BoundingBoxProps) {
+  const labelOffset = index * 20; // stagger labels by 20px each
+
   return (
     <div
-      className="absolute pointer-events-none"
+      className="absolute border-2 pointer-events-none"
       style={{
-        left: `${x}%`,
-        top: `${y}%`,
-        width: `${width}%`,
-        height: `${height}%`,
+        left: `${x * 100}%`,
+        top: `${y * 100}%`,
+        width: `${width * 100}%`,
+        height: `${height * 100}%`,
+        borderColor: color,
       }}
     >
-      {/* Bounding box border */}
-      <div
-        className="absolute inset-0 border-2"
-        style={{ borderColor: color }}
-      />
-
-      {showLabel !== false && (
-        <div className="absolute -top-6 left-0 px-2 py-1 text-[11px] font-bold whitespace-nowrap">
-          {label} {Math.round(confidence * 100)}%
+      {showLabel && (
+        <div
+          className="absolute left-0 px-1.5 py-0.5 text-[10px] font-bold whitespace-nowrap"
+          style={{
+            top: `${-18 - labelOffset}px`,
+            backgroundColor: color,
+            color: '#0b0f14',
+          }}
+        >
+          {label} {(confidence * 100).toFixed(0)}%
         </div>
       )}
     </div>
