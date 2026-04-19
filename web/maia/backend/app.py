@@ -68,7 +68,7 @@ elif (BASE_DIR / "frontend" / "build").exists():
 else:
     FRONTEND_DIR = None
 
-DEFAULT_ORIGINS = "http://localhost:3000,http://localhost:5173,http://localhost:8000"
+DEFAULT_ORIGINS = "https://alexcattani44-maia-backend.hf.space,http://localhost:3000,http://localhost:5173,http://localhost:8000,https://openmaia.vercel.app"
 CORS_ORIGINS = [
     o.strip()
     for o in os.environ.get("MAIA_CORS_ORIGINS", DEFAULT_ORIGINS).split(",")
