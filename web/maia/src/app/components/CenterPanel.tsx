@@ -28,8 +28,8 @@ interface CenterPanelProps {
   progress?: number;
 }
 
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 4;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 8;
 
 export function CenterPanel({
   activeTab,
@@ -176,20 +176,36 @@ export function CenterPanel({
         </div>
         {/* Zoom controls */}
         {imageLoaded && imageUrl && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setZoom((prev) => Math.max(MIN_ZOOM, prev - 0.1))}
               className="px-2 py-1.5 rounded-md text-[16px] font-bold transition-colors hover:bg-[var(--color-bg-panel)] text-[var(--color-text-secondary)]"
+              title="Zoom out"
             >
-              -
+              −
             </button>
             <button
               onClick={() => setZoom((prev) => Math.min(MAX_ZOOM, prev + 0.1))}
               className="px-2 py-1.5 rounded-md text-[16px] font-bold transition-colors hover:bg-[var(--color-bg-panel)] text-[var(--color-text-secondary)]"
+              title="Zoom in"
             >
               +
             </button>
-            <span className="text-[var(--color-text-secondary)]">
+            <button
+              onClick={() => {
+                setZoom(1);
+                const container = scrollContainerRef.current;
+                if (container) {
+                  container.scrollLeft = 0;
+                  container.scrollTop = 0;
+                }
+              }}
+              className="ml-1 px-2.5 py-1.5 rounded-md text-[11.6px] font-bold transition-colors hover:bg-[var(--color-bg-panel)] text-[var(--color-text-secondary)]"
+              title="Reset zoom"
+            >
+              Reset
+            </button>
+            <span className="ml-1 text-[var(--color-text-secondary)] text-[11.6px] min-w-[42px] text-right tabular-nums">
               {Math.round(zoom * 100)}%
             </span>
           </div>
