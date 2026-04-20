@@ -219,7 +219,7 @@ export function CenterPanel({
         </span>
       </div>
       {/* Image viewer */}
-      <div className="flex relative min-w-0 min-h-0 flex overflow-hidden">
+      <div className="flex-1 relative min-w-0 min-h-0 flex overflow-hidden">
         <div
           ref={scrollContainerRef}
           onMouseDown={onPanStart}
@@ -319,7 +319,7 @@ export function CenterPanel({
         </div>
         <div className="flex items-center gap-3">
           <span>{inferenceTime || "—"}</span>
-        </div>{" "}
+        </div>
       </div>
     </div>
   );
