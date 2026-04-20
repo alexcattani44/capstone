@@ -157,7 +157,7 @@ export function CenterPanel({
   }, [isPanning]);
 
   return (
-    <div className="flex-1 flex flex-col bg-[var(--color-bg-default)] min-h-0 min-w-0 overflow-hidden">
+    <div className="flex-1 min-w-0 min-h-0 h-full bg-[var(--color-bg-dark)] flex flex-col relative overflow-hidden">
       {/* Toolbar */}
       <div className="border-b border-[var(--color-border-default)] px-6 py-3 flex items-center justify-between">
         <div className="flex gap-1">
