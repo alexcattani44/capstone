@@ -85,50 +85,75 @@ export function CenterPanel({
     setFitSize({ width: fitWidth, height: fitHeight });
   }, []);
 
-  // // ctrl/cmd + scroll to zoom
-  // // ctrl/cmd + scroll to zoom — stepped, device-agnostic
-  // useEffect(() => {
-  //   const container = scrollContainerRef.current;
-  //   if (!container) return;
+  // Ctrl/Cmd + wheel to zoom toward cursor
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
-  //   const ZOOM_STEP = 1.15;
-  //   const DELTA_THRESHOLD = 40;
-  //   let accumulatedDelta = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
 
-  //   const onWheel = (e: WheelEvent) => {
-  //     if (!e.ctrlKey && !e.metaKey) return;
-  //     e.preventDefault();
+      const rect = container.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+      const contentX = container.scrollLeft + offsetX;
+      const contentY = container.scrollTop + offsetY;
 
-  //     accumulatedDelta += e.deltaY;
-  //     if (Math.abs(accumulatedDelta) < DELTA_THRESHOLD) return;
-  //     const zoomIn = accumulatedDelta < 0;
-  //     accumulatedDelta = 0;
+      // Smooth continuous zoom based on wheel delta
+      const zoomFactor = Math.exp(-e.deltaY * 0.002);
 
-  //     const rect = container.getBoundingClientRect();
-  //     const offsetX = e.clientX - rect.left;
-  //     const offsetY = e.clientY - rect.top;
-  //     const contentX = container.scrollLeft + offsetX;
-  //     const contentY = container.scrollTop + offsetY;
+      setZoom((prev) => {
+        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev * zoomFactor));
+        if (next === prev) return prev;
+        const ratio = next / prev;
+        requestAnimationFrame(() => {
+          container.scrollLeft = contentX * ratio - offsetX;
+          container.scrollTop = contentY * ratio - offsetY;
+        });
+        return next;
+      });
+    };
 
-  //     setZoom((prev) => {
-  //       const factor = zoomIn ? ZOOM_STEP : 1 / ZOOM_STEP;
-  //       const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev * factor));
-  //       if (next === prev) return prev;
-  //       const ratio = next / prev;
-  //       requestAnimationFrame(() => {
-  //         container.scrollLeft = contentX * ratio - offsetX;
-  //         container.scrollTop = contentY * ratio - offsetY;
-  //       });
-  //       return next;
-  //     });
-  //   };
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, []);
 
-  //   container.addEventListener("wheel", onWheel, { passive: false });
-  //   return () => container.removeEventListener("wheel", onWheel);
-  // }, []);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
-  // const zoomedWidth = fitSize ? fitSize.width * zoom : undefined;
-  // const zoomedHeight = fitSize ? fitSize.height * zoom : undefined;
+  const onPanStart = (e: React.MouseEvent) => {
+    const container = scrollContainerRef.current;
+    if (!container || zoom <= 1) return;
+    setIsPanning(true);
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: container.scrollLeft,
+      scrollTop: container.scrollTop,
+    };
+  };
+
+  useEffect(() => {
+    if (!isPanning) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      container.scrollLeft = panStartRef.current.scrollLeft - dx;
+      container.scrollTop = panStartRef.current.scrollTop - dy;
+    };
+    const onUp = () => setIsPanning(false);
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [isPanning]);
 
   return (
     <div className="flex-1 bg-[var(--color-bg-dark)] flex flex-col relative">
@@ -179,10 +204,13 @@ export function CenterPanel({
       </div>
 
       {/* Image viewer */}
-      <div className="flex-1 relative min-h-0 flex">
+      <div className="flex-1 relative min-h-0 min-w-0 flex overflow-hidden custom-scrollbar">
         <div
           ref={scrollContainerRef}
-          className="flex-1 relative overflow-auto min-h-0 p-6"
+          onMouseDown={onPanStart}
+          className={`flex-1 relative overflow-auto min-h-0 min-w-0 p-6 custom-scrollbar ${
+            zoom > 1 ? (isPanning ? "cursor-grabbing" : "cursor-grab") : ""
+          }`}
         >
           {/* Progress bar */}
           {progress != null && progress < 100 && (
