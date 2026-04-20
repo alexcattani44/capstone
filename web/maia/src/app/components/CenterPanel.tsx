@@ -125,6 +125,7 @@ export function CenterPanel({
   const onPanStart = (e: React.MouseEvent) => {
     const container = scrollContainerRef.current;
     if (!container || zoom <= 1) return;
+    e.preventDefault();
     setIsPanning(true);
     panStartRef.current = {
       x: e.clientX,
@@ -156,7 +157,7 @@ export function CenterPanel({
   }, [isPanning]);
 
   return (
-    <div className="flex-1 bg-[var(--color-bg-dark)] flex flex-col relative">
+    <div className="flex-1 flex flex-col bg-[var(--color-bg-default)] min-h-0 min-w-0 overflow-hidden">
       {/* Toolbar */}
       <div className="border-b border-[var(--color-border-default)] px-6 py-3 flex items-center justify-between">
         <div className="flex gap-1">
@@ -211,20 +212,18 @@ export function CenterPanel({
           </div>
         )}
       </div>
-
       {/* File name */}
       <div className="border-b border-[var(--color-border-default)] px-6 py-3 flex items-center gap-2">
         <span className="text-[var(--color-text-secondary)] text-xs">
           {fileName}
         </span>
       </div>
-
       {/* Image viewer */}
-      <div className="flex-1 relative min-h-0 min-w-0 flex overflow-hidden custom-scrollbar">
+      <div className="flex relative min-w-0 min-h-0 flex overflow-hidden">
         <div
           ref={scrollContainerRef}
           onMouseDown={onPanStart}
-          className={`flex-1 relative overflow-auto min-h-0 min-w-0 p-6 custom-scrollbar ${
+          className={`flex-1 relative min-h-0 min-w-0 p-6 overflow-auto custom-scrollbar ${
             zoom > 1 ? (isPanning ? "cursor-grabbing" : "cursor-grab") : ""
           }`}
         >
@@ -246,9 +245,9 @@ export function CenterPanel({
           )}
 
           {imageLoaded && imageUrl ? (
-            <div className="min-w-full min-h-full flex items-center justify-center">
+            <div className="relative min-w-full min-h-full flex items-center justify-center">
               <div
-                className="relative"
+                className="relative flex-shrink-0"
                 style={{
                   width: fitSize ? fitSize.width * zoom : undefined,
                   height: fitSize ? fitSize.height * zoom : undefined,
@@ -298,7 +297,6 @@ export function CenterPanel({
           )}
         </div>
       </div>
-
       {/* Status bar */}
       <div className="border-t border-[var(--color-border-default)] px-6 py-2.5 flex items-center justify-between text-[11px] text-[var(--color-text-secondary)]">
         <div className="flex items-center gap-2">

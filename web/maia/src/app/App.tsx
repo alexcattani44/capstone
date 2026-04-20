@@ -191,8 +191,9 @@ export default function App() {
     setFileName(file.name);
     resetAnalysis();
 
-    const isDicom = file.name.toLowerCase().endsWith('.dcm') || 
-                    file.name.toLowerCase().endsWith('.dicom');
+    const isDicom =
+      file.name.toLowerCase().endsWith(".dcm") ||
+      file.name.toLowerCase().endsWith(".dicom");
 
     if (isDicom) {
       try {
@@ -201,21 +202,21 @@ export default function App() {
         const dataSet = dicomParser.parseDicom(byteArray);
 
         // Extract metadata
-        const patientId = dataSet.string('x00100020') || '—';
-        const modality = dataSet.string('x00080060') || '—';
-        const laterality = dataSet.string('x00200062') || '—';
-        const viewPosition = dataSet.string('x00185101') || '—';
-        const rows = dataSet.uint16('x00280010') || 0;
-        const cols = dataSet.uint16('x00280011') || 0;
-        const bitsStored = dataSet.uint16('x00280101') || 0;
+        const patientId = dataSet.string("x00100020") || "—";
+        const modality = dataSet.string("x00080060") || "—";
+        const laterality = dataSet.string("x00200062") || "—";
+        const viewPosition = dataSet.string("x00185101") || "—";
+        const rows = dataSet.uint16("x00280010") || 0;
+        const cols = dataSet.uint16("x00280011") || 0;
+        const bitsStored = dataSet.uint16("x00280101") || 0;
 
         setMetadata([
-          { label: 'Patient ID', value: patientId },
-          { label: 'Modality', value: modality },
-          { label: 'Laterality', value: laterality },
-          { label: 'View', value: viewPosition },
-          { label: 'Image Size', value: `${cols} × ${rows}` },
-          { label: 'Bit Depth', value: `${bitsStored}-bit` },
+          { label: "Patient ID", value: patientId },
+          { label: "Modality", value: modality },
+          { label: "Laterality", value: laterality },
+          { label: "View", value: viewPosition },
+          { label: "Image Size", value: `${cols} × ${rows}` },
+          { label: "Bit Depth", value: `${bitsStored}-bit` },
         ]);
 
         // Render pixel data to a canvas → blob URL
@@ -224,29 +225,30 @@ export default function App() {
           const pixelData = new Uint16Array(
             byteArray.buffer,
             pixelDataElement.dataOffset,
-            rows * cols
+            rows * cols,
           );
 
           // Handle MONOCHROME1 (inverted)
-          const photometric = dataSet.string('x00280004') || '';
+          const photometric = dataSet.string("x00280004") || "";
 
           // Normalize to 0–255
-          let min = Infinity, max = -Infinity;
+          let min = Infinity,
+            max = -Infinity;
           for (let i = 0; i < pixelData.length; i++) {
             if (pixelData[i] < min) min = pixelData[i];
             if (pixelData[i] > max) max = pixelData[i];
           }
           const range = max - min || 1;
 
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           canvas.width = cols;
           canvas.height = rows;
-          const ctx = canvas.getContext('2d')!;
+          const ctx = canvas.getContext("2d")!;
           const imageData = ctx.createImageData(cols, rows);
 
           for (let i = 0; i < pixelData.length; i++) {
             let val = ((pixelData[i] - min) / range) * 255;
-            if (photometric === 'MONOCHROME1') val = 255 - val;
+            if (photometric === "MONOCHROME1") val = 255 - val;
             imageData.data[i * 4] = val;
             imageData.data[i * 4 + 1] = val;
             imageData.data[i * 4 + 2] = val;
@@ -259,10 +261,10 @@ export default function App() {
               setImageUrl(URL.createObjectURL(blob));
               setImageLoaded(true);
             }
-          }, 'image/png');
+          }, "image/png");
         }
       } catch (err) {
-        console.error('DICOM parse error:', err);
+        console.error("DICOM parse error:", err);
         setImageLoaded(false);
       }
     } else {
@@ -270,12 +272,12 @@ export default function App() {
       setImageUrl(URL.createObjectURL(file));
       setImageLoaded(true);
       setMetadata([
-        { label: 'Patient ID', value: '—' },
-        { label: 'Modality', value: 'MG' },
-        { label: 'Laterality', value: '—' },
-        { label: 'View', value: '—' },
-        { label: 'Image Size', value: '—' },
-        { label: 'Bit Depth', value: '—' },
+        { label: "Patient ID", value: "—" },
+        { label: "Modality", value: "MG" },
+        { label: "Laterality", value: "—" },
+        { label: "View", value: "—" },
+        { label: "Image Size", value: "—" },
+        { label: "Bit Depth", value: "—" },
       ]);
     }
   };
@@ -378,7 +380,7 @@ export default function App() {
           />
         </aside>
 
-        <main className="flex-1">
+        <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
           <CenterPanel
             activeTab={activeTab}
             onTabChange={setActiveTab}

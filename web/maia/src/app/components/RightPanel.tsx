@@ -1,5 +1,5 @@
-import { DetectionItem } from './DetectionItem';
-import { RiskGauge } from './RiskGauge';
+import { DetectionItem } from "./DetectionItem";
+import { RiskGauge } from "./RiskGauge";
 
 interface Detection {
   name: string;
@@ -43,12 +43,12 @@ function getRiskStyle(level: string) {
   return RISK_STYLES[level.toLowerCase()] ?? RISK_STYLES.average;
 }
 
-export function RightPanel({ 
-  hasResults, 
+export function RightPanel({
+  hasResults,
   detections = [],
   classification,
   risk,
-  modelInfo
+  modelInfo,
 }: RightPanelProps) {
   const riskStyle = risk ? getRiskStyle(risk.level) : null;
 
@@ -94,7 +94,7 @@ export function RightPanel({
                   </p>
                 </div>
                 <div className="h-1.5 bg-[var(--color-bg-panel)] rounded-full overflow-hidden mb-3">
-                  <div 
+                  <div
                     className="h-full rounded-full bg-gradient-to-r from-[#ffb74d] to-[#ef5350]"
                     style={{ width: `${classification.confidence * 100}%` }}
                   />
@@ -105,7 +105,8 @@ export function RightPanel({
                 </div>
                 <div className="bg-[var(--color-bg-panel)] border-l-[3px] border-[var(--color-accent-cyan)] rounded-lg p-3">
                   <p className="text-[10px] text-[var(--color-text-secondary)] leading-[1.5]">
-                    <span className="font-bold">Grad-CAM Insight:</span> {classification.description}
+                    <span className="font-bold">Grad-CAM Insight:</span>{" "}
+                    {classification.description}
                   </p>
                 </div>
               </div>
@@ -121,7 +122,10 @@ export function RightPanel({
                 </h3>
                 <span
                   className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.5px] rounded-full"
-                  style={{ backgroundColor: riskStyle.bg, color: riskStyle.text }}
+                  style={{
+                    backgroundColor: riskStyle.bg,
+                    color: riskStyle.text,
+                  }}
                 >
                   {risk.level}
                 </span>
@@ -130,14 +134,23 @@ export function RightPanel({
                 <RiskGauge percentage={risk.percentage} />
                 <div className="flex justify-between pt-2 text-[9px] uppercase tracking-[0.8px]">
                   <span style={{ color: RISK_STYLES.average.text }}>Low</span>
-                  <span style={{ color: RISK_STYLES.elevated.text }}>Elevated</span>
+                  <span style={{ color: RISK_STYLES.elevated.text }}>
+                    Elevated
+                  </span>
                   <span style={{ color: RISK_STYLES.high.text }}>High</span>
                 </div>
-                <div className="bg-[var(--color-bg-panel)] border-l-[3px] rounded-lg p-2.5 mt-3"
+                <div
+                  className="bg-[var(--color-bg-panel)] border-l-[3px] rounded-lg p-2.5 mt-3"
                   style={{ borderColor: riskStyle.text }}
                 >
                   <p className="text-[9px] text-[var(--color-text-secondary)] leading-[1.5]">
-                    <span className="font-bold" style={{ color: riskStyle.text }}>Assessment:</span> {risk.assessment}
+                    <span
+                      className="font-bold"
+                      style={{ color: riskStyle.text }}
+                    >
+                      Assessment:
+                    </span>{" "}
+                    {risk.assessment}
                   </p>
                 </div>
               </div>
@@ -154,28 +167,52 @@ export function RightPanel({
               </div>
               <div className="px-3.5 py-3 flex flex-col gap-2">
                 <div className="flex justify-between text-[10px]">
-                  <span className="text-[var(--color-text-secondary)]">Detection</span>
-                  <span className="text-[var(--color-text-primary)] font-semibold">{modelInfo.detection}</span>
+                  <span className="text-[var(--color-text-secondary)]">
+                    Detection
+                  </span>
+                  <span className="text-[var(--color-text-primary)] font-semibold">
+                    {modelInfo.detection}
+                  </span>
                 </div>
                 <div className="flex justify-between text-[10px]">
-                  <span className="text-[var(--color-text-secondary)]">Classifier</span>
-                  <span className="text-[var(--color-text-primary)] font-semibold">{modelInfo.classifier}</span>
+                  <span className="text-[var(--color-text-secondary)]">
+                    Classifier
+                  </span>
+                  <span className="text-[var(--color-text-primary)] font-semibold">
+                    {modelInfo.classifier}
+                  </span>
                 </div>
                 <div className="flex justify-between text-[10px]">
-                  <span className="text-[var(--color-text-secondary)]">Risk Model</span>
-                  <span className="text-[var(--color-text-primary)] font-semibold">{modelInfo.riskModel}</span>
+                  <span className="text-[var(--color-text-secondary)]">
+                    Risk Model
+                  </span>
+                  <span className="text-[var(--color-text-primary)] font-semibold">
+                    {modelInfo.riskModel}
+                  </span>
                 </div>
                 <div className="flex justify-between text-[10px]">
-                  <span className="text-[var(--color-text-secondary)]">Dataset</span>
-                  <span className="text-[var(--color-text-primary)] font-semibold">{modelInfo.dataset}</span>
+                  <span className="text-[var(--color-text-secondary)]">
+                    Dataset
+                  </span>
+                  <span className="text-[var(--color-text-primary)] font-semibold">
+                    {modelInfo.dataset}
+                  </span>
                 </div>
                 <div className="flex justify-between text-[10px]">
-                  <span className="text-[var(--color-text-secondary)]">Inference</span>
-                  <span className="text-[var(--color-text-primary)] font-semibold">{modelInfo.inference}</span>
+                  <span className="text-[var(--color-text-secondary)]">
+                    Inference
+                  </span>
+                  <span className="text-[var(--color-text-primary)] font-semibold">
+                    {modelInfo.inference}
+                  </span>
                 </div>
                 <div className="flex justify-between text-[10px]">
-                  <span className="text-[var(--color-text-secondary)]">Compute</span>
-                  <span className="text-[var(--color-text-primary)] font-semibold">{modelInfo.compute}</span>
+                  <span className="text-[var(--color-text-secondary)]">
+                    Compute
+                  </span>
+                  <span className="text-[var(--color-text-primary)] font-semibold">
+                    {modelInfo.compute}
+                  </span>
                 </div>
               </div>
             </div>
