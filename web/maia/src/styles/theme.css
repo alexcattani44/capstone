@@ -137,6 +137,7 @@
 @layer components {
   .custom-scrollbar::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     @apply bg-[var(--color-border-default)];

@@ -1,3 +1,4 @@
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { BoundingBox } from "./BoundingBox";
 
 interface BoundingBoxData {
@@ -26,6 +27,9 @@ interface CenterPanelProps {
   analysisError?: string;
   progress?: number;
 }
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 4;
 
 export function CenterPanel({
   activeTab,
@@ -56,6 +60,76 @@ export function CenterPanel({
     heatmapBase64;
   const hasResults = inferenceTime != null;
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [fitSize, setFitSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+
+  // reset zoom when image changes
+  useEffect(() => {
+    setZoom(1);
+  }, [imageUrl]);
+
+  const computeFitSize = useCallback(() => {
+    const container = scrollContainerRef.current;
+    const img = imgRef.current;
+    if (!container || !img) return;
+    const { width, height } = container.getBoundingClientRect();
+    const { width: imgWidth, height: imgHeight } = img.getBoundingClientRect();
+    const scale = Math.min(width / imgWidth, height / imgHeight);
+    const fitWidth = imgWidth * scale;
+    const fitHeight = imgHeight * scale;
+    setFitSize({ width: fitWidth, height: fitHeight });
+  }, []);
+
+  // // ctrl/cmd + scroll to zoom
+  // // ctrl/cmd + scroll to zoom — stepped, device-agnostic
+  // useEffect(() => {
+  //   const container = scrollContainerRef.current;
+  //   if (!container) return;
+
+  //   const ZOOM_STEP = 1.15;
+  //   const DELTA_THRESHOLD = 40;
+  //   let accumulatedDelta = 0;
+
+  //   const onWheel = (e: WheelEvent) => {
+  //     if (!e.ctrlKey && !e.metaKey) return;
+  //     e.preventDefault();
+
+  //     accumulatedDelta += e.deltaY;
+  //     if (Math.abs(accumulatedDelta) < DELTA_THRESHOLD) return;
+  //     const zoomIn = accumulatedDelta < 0;
+  //     accumulatedDelta = 0;
+
+  //     const rect = container.getBoundingClientRect();
+  //     const offsetX = e.clientX - rect.left;
+  //     const offsetY = e.clientY - rect.top;
+  //     const contentX = container.scrollLeft + offsetX;
+  //     const contentY = container.scrollTop + offsetY;
+
+  //     setZoom((prev) => {
+  //       const factor = zoomIn ? ZOOM_STEP : 1 / ZOOM_STEP;
+  //       const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev * factor));
+  //       if (next === prev) return prev;
+  //       const ratio = next / prev;
+  //       requestAnimationFrame(() => {
+  //         container.scrollLeft = contentX * ratio - offsetX;
+  //         container.scrollTop = contentY * ratio - offsetY;
+  //       });
+  //       return next;
+  //     });
+  //   };
+
+  //   container.addEventListener("wheel", onWheel, { passive: false });
+  //   return () => container.removeEventListener("wheel", onWheel);
+  // }, []);
+
+  // const zoomedWidth = fitSize ? fitSize.width * zoom : undefined;
+  // const zoomedHeight = fitSize ? fitSize.height * zoom : undefined;
+
   return (
     <div className="flex-1 bg-[var(--color-bg-dark)] flex flex-col relative">
       {/* Toolbar */}
@@ -75,70 +149,110 @@ export function CenterPanel({
             </button>
           ))}
         </div>
+        {/* Zoom controls */}
+        {imageLoaded && imageUrl && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setZoom((prev) => Math.max(MIN_ZOOM, prev - 0.1))}
+              className="px-2 py-1.5 rounded-md text-[16px] font-bold transition-colors hover:bg-[var(--color-bg-panel)] text-[var(--color-text-secondary)]"
+            >
+              -
+            </button>
+            <button
+              onClick={() => setZoom((prev) => Math.min(MAX_ZOOM, prev + 0.1))}
+              className="px-2 py-1.5 rounded-md text-[16px] font-bold transition-colors hover:bg-[var(--color-bg-panel)] text-[var(--color-text-secondary)]"
+            >
+              +
+            </button>
+            <span className="text-[var(--color-text-secondary)]">
+              {Math.round(zoom * 100)}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* File name */}
+      <div className="border-b border-[var(--color-border-default)] px-6 py-3 flex items-center gap-2">
         <span className="text-[var(--color-text-secondary)] text-xs">
           {fileName}
         </span>
       </div>
 
       {/* Image viewer */}
-      <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden min-h-0">
-        {/* Progress bar */}
-        {progress != null && progress < 100 && (
-          <div className="absolute top-0 left-0 right-0 z-20">
-            <div
-              className="h-1 bg-[var(--color-accent-cyan)] transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
-
-        {/* Error message */}
-        {analysisError && (
-          <div className="absolute top-4 left-4 right-4 z-20 bg-red-900/80 border border-red-500/40 rounded-lg px-4 py-3 text-sm text-red-200">
-            {analysisError}
-          </div>
-        )}
-
-        {imageLoaded && imageUrl ? (
-          <div className="relative w-full h-full flex items-center justify-center">
-            {/* Mammogram image */}
-            <img
-              src={imageUrl}
-              alt="Mammogram"
-              className="max-w-full max-h-full object-contain"
-              style={{ minHeight: '200px' }}
-            />
-
-            {/* Heatmap overlay — matches the image, not the container */}
-            {showHeatOverlay && (
-              <img
-                src={`data:image/png;base64,${heatmapBase64}`}
-                alt="Heatmap overlay"
-                className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                style={{ opacity: heatmapIntensity, mixBlendMode: "screen" }}
+      <div className="flex-1 relative min-h-0 flex">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 relative overflow-auto min-h-0 p-6"
+        >
+          {/* Progress bar */}
+          {progress != null && progress < 100 && (
+            <div className="sticky top-0 left-0 z-20 -mx-6 -mt-6 mb-[-4px]">
+              <div
+                className="h-1 bg-[var(--color-accent-cyan)] transition-all duration-300"
+                style={{ width: `${progress}%` }}
               />
-            )}
+            </div>
+          )}
 
-            {/* Bounding boxes */}
-            {showBoxes &&
-              boundingBoxes.map((box, index) => (
-                <BoundingBox
-                  key={index}
-                  {...box}
-                  showLabel={showConfidenceLabels}
+          {/* Error message */}
+          {analysisError && (
+            <div className="sticky top-4 z-20 mb-4 bg-red-900/80 border border-red-500/40 rounded-lg px-4 py-3 text-sm text-red-200">
+              {analysisError}
+            </div>
+          )}
+
+          {imageLoaded && imageUrl ? (
+            <div className="min-w-full min-h-full flex items-center justify-center">
+              <div
+                className="relative"
+                style={{
+                  width: fitSize ? fitSize.width * zoom : undefined,
+                  height: fitSize ? fitSize.height * zoom : undefined,
+                }}
+              >
+                <img
+                  ref={imgRef}
+                  src={imageUrl}
+                  alt="Mammogram"
+                  draggable={false}
+                  onLoad={computeFitSize}
+                  className="block w-full h-full select-none"
                 />
-              ))}
-          </div>
-        ) : (
-          <div className="text-center opacity-50">
-            <h2 className="text-[var(--color-text-primary)] text-xl font-semibold mb-2">
-              No Image Loaded
-            </h2>
-            <p className="text-[var(--color-text-secondary)] text-[13px]">
-              Upload a mammogram or load the demo to begin
-            </p>
-          </div>
-        )}
+                {showHeatOverlay && (
+                  <img
+                    src={`data:image/png;base64,${heatmapBase64}`}
+                    alt="Heatmap Overlay"
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    style={{
+                      opacity: heatmapIntensity,
+                      mixBlendMode: "screen",
+                    }}
+                  />
+                )}
+                {showBoxes &&
+                  boundingBoxes.map((box, i) => (
+                    <BoundingBox
+                      key={i}
+                      {...box}
+                      showLabel={showConfidenceLabels}
+                    />
+                  ))}
+              </div>
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-center opacity-50 pointer-events-none">
+              <div>
+                <h2 className="text-[var(--color-text-primary)] text-xl font-semibold mb-2">
+                  No Image Loaded
+                </h2>
+                <p className="text-[var(--color-text-secondary)] text-[13px]">
+                  Upload a mammogram or load the demo to begin
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Status bar */}
@@ -161,7 +275,9 @@ export function CenterPanel({
                 : "Ready"}
           </span>
         </div>
-        <span>{inferenceTime || "—"}</span>
+        <div className="flex items-center gap-3">
+          <span>{inferenceTime || "—"}</span>
+        </div>{" "}
       </div>
     </div>
   );
