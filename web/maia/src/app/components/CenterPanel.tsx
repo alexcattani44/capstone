@@ -261,16 +261,70 @@ export function CenterPanel({
                   onLoad={computeFitSize}
                   className="block w-full h-full select-none"
                 />
+                {/* Heatmap overlay — replace the existing <img> */}
                 {showHeatOverlay && (
-                  <img
-                    src={`data:image/png;base64,${heatmapBase64}`}
-                    alt="Heatmap Overlay"
-                    draggable={false}
-                    className="absolute inset-0 w-full h-full pointer-events-none"
-                    style={{
-                      opacity: heatmapIntensity,
-                      mixBlendMode: "screen",
+                  <canvas
+                    ref={(canvas) => {
+                      if (!canvas || !heatmapBase64) return;
+                      const ctx = canvas.getContext("2d");
+                      if (!ctx) return;
+
+                      const img = new Image();
+                      img.onload = () => {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+
+                        // Draw grayscale heatmap to read pixel values
+                        ctx.drawImage(img, 0, 0);
+                        const imageData = ctx.getImageData(
+                          0,
+                          0,
+                          img.width,
+                          img.height,
+                        );
+                        const data = imageData.data;
+
+                        // Apply jet-style colormap: blue → cyan → green → yellow → red
+                        for (let i = 0; i < data.length; i += 4) {
+                          const v = data[i] / 255; // grayscale value 0-1
+                          let r, g, b;
+
+                          if (v < 0.25) {
+                            r = 0;
+                            g = Math.round(v * 4 * 255);
+                            b = 255;
+                          } else if (v < 0.5) {
+                            r = 0;
+                            g = 255;
+                            b = Math.round((1 - (v - 0.25) * 4) * 255);
+                          } else if (v < 0.75) {
+                            r = Math.round((v - 0.5) * 4 * 255);
+                            g = 255;
+                            b = 0;
+                          } else {
+                            r = 255;
+                            g = Math.round((1 - (v - 0.75) * 4) * 255);
+                            b = 0;
+                          }
+
+                          // Make low-probability regions transparent
+                          const alpha =
+                            v < 0.15
+                              ? 0
+                              : Math.min(255, Math.round(v * 255 * 1.5));
+
+                          data[i] = r;
+                          data[i + 1] = g;
+                          data[i + 2] = b;
+                          data[i + 3] = alpha;
+                        }
+
+                        ctx.putImageData(imageData, 0, 0);
+                      };
+                      img.src = `data:image/png;base64,${heatmapBase64}`;
                     }}
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                    style={{ opacity: heatmapIntensity }}
                   />
                 )}
                 {showBoxes &&
