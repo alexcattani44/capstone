@@ -362,7 +362,7 @@ export default function App() {
   // ---------------------------------------------------------------
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--color-bg-dark)]">
+    <div className="flex flex-col h-screen min-h-0 overflow-hidden bg-[var(--color-bg-dark)]">
       <Header />
       <div className="flex-1 flex overflow-hidden">
         <aside className="w-[340px] shrink-0">
@@ -394,7 +394,7 @@ export default function App() {
           />
         </aside>
 
-        <main className="flex-1">
+        <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
           <CenterPanel
             activeTab={activeTab}
             onTabChange={setActiveTab}
