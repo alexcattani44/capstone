@@ -207,6 +207,18 @@ class HealthResponse(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+DEMO_FILE_PATH = Path(__file__).parent / "calc.dcm"
+
+@app.get("/api/demo")
+def get_demo_file():
+    if not DEMO_FILE_PATH.exists():
+        raise HTTPException(status_code=404, detail="Demo file not found")
+    return FileResponse(
+        DEMO_FILE_PATH,
+        media_type="application/dicom",
+        filename="demo_mammogram.dcm",
+    )
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health():
     """Health check — also reports which models are loaded."""
