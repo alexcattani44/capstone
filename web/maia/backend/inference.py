@@ -476,12 +476,15 @@ class MammographyInference:
             ehr_encoded = self._encode_ehr(ehr_data)
             # ehr_encoded shape: [1, 4]
 
-            # Match risk MLP input names dynamically
+            # Match inputs by shape — unambiguous regardless of naming
             risk_inputs = {}
             for inp in risk_mlp_model.get_inputs():
-                if "image" in inp.name or "feat" in inp.name:
+                expected_dim = inp.shape[-1] if inp.shape else None
+                if expected_dim == features.shape[-1]:
+                    # This input expects 1280-dim → image features
                     risk_inputs[inp.name] = features
-                elif "ehr" in inp.name:
+                elif expected_dim == ehr_encoded.shape[-1]:
+                    # This input expects 4-dim → EHR features
                     risk_inputs[inp.name] = ehr_encoded
 
             risk_out = risk_mlp_model.get_outputs()[0].name
